@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Token 成本计算器</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg: #0a0a12;
+  --surface: rgba(255,255,255,0.05);
+  --surface-hover: rgba(255,255,255,0.08);
+  --border: rgba(255,255,255,0.08);
+  --border-focus: rgba(0,212,255,0.5);
+  --text: #e8e8f0;
+  --text-secondary: #8888a0;
+  --accent: #00d4ff;
+  --accent-dim: rgba(0,212,255,0.15);
+  --card-bg: rgba(255,255,255,0.03);
+  --card-border: rgba(255,255,255,0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* ===== Particle Canvas ===== */
+#particles-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ===== Layout ===== */
+.app-wrapper {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px 60px;
+}
+
+/* ===== Header ===== */
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.header h1 {
+  font-size: 2.4rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff 30%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 1px;
+}
+
+.header p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-top: 8px;
+  letter-spacing: 0.5px;
+}
+
+/* ===== Glass Card ===== */
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px 30px;
+  width: 100%;
+  max-width: 680px;
+  margin-bottom: 20px;
+  transition: border-color 0.3s;
+}
+
+.card:hover {
+  border-color: rgba(255,255,255,0.10);
+}
+
+.card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title .icon {
+  color: var(--accent);
+  font-size: 1.2rem;
+}
+
+/* ===== Form ===== */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.form-group input,
+.form-group select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: var(--font);
+  outline: none;
+  transition: all 0.25s;
+  width: 100%;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.form-group input::placeholder {
+  color: #555568;
+}
+
+.form-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238888a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+.form-group select option {
+  background: #1a1a2e;
+  color: var(--text);
+}
+
+/* Custom price fields */
+.custom-prices {
+  display: none;
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 4px;
+  padding: 16px;
+  background: rgba(0,212,255,0.03);
+  border: 1px dashed rgba(0,212,255,0.2);
+  border-radius: var(--radius-sm);
+}
+
+.custom-prices.visible {
+  display: grid;
+}
+
+.custom-prices .form-group label {
+  color: var(--accent);
+}
+
+/* ===== Results ===== */
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.result-item {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: center;
+  border: 1px solid var(--border);
+  transition: all 0.3s;
+}
+
+.result-item:hover {
+  border-color: rgba(0,212,255,0.15);
+}
+
+.result-item .label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.result-item .value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  transition: all 0.3s ease;
+}
+
+.result-item .value.accent-cyan {
+  color: var(--accent);
+}
+
+.result-item .value.accent-green {
+  color: #4ade80;
+}
+
+.result-item .value.accent-orange {
+  color: #fbbf24;
+}
+
+.result-item .unit {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Total */
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(0,212,255,0.15);
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+}
+
+.total-row .label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.total-row .value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Monthly Section ===== */
+.monthly-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.monthly-input-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.monthly-input-row .form-group {
+  flex: 1;
+}
+
+.monthly-input-row .form-group input {
+  max-width: 180px;
+}
+
+.monthly-result {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.monthly-item {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.monthly-item .label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.monthly-item .value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Buttons ===== */
+.btn-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  border: none;
+  transition: all 0.25s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0a0a12;
+}
+
+.btn-primary:hover {
+  background: #33ddff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0,212,255,0.3);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.btn-success {
+  background: rgba(74,222,128,0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,0.2);
+}
+
+.btn-success:hover {
+  background: rgba(74,222,128,0.25);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: rgba(0,212,255,0.15);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,212,255,0.25);
+  border-radius: var(--radius-sm);
+  padding: 12px 24px;
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 500;
+  z-index: 100;
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 640px) {
+  .app-wrapper { padding: 24px 14px 40px; }
+  .header h1 { font-size: 1.8rem; }
+  .card { padding: 20px 18px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .custom-prices { grid-template-columns: 1fr; }
+  .results-grid { grid-template-columns: 1fr; }
+  .monthly-result { grid-template-columns: 1fr; }
+  .monthly-input-row { flex-direction: column; align-items: stretch; }
+  .monthly-input-row .form-group input { max-width: 100%; }
+  .btn-row { flex-direction: column; }
+  .total-row { flex-direction: column; gap: 8px; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- Particle Canvas -->
+<canvas id="particles-canvas"></canvas>
+
+<!-- Toast -->
+<div class="toast" id="toast">✓ 已复制到剪贴板</div>
+
+<!-- App -->
+<div class="app-wrapper">
+
+  <!-- Header -->
+  <header class="header">
+    <h1>🪙 Token 成本计算器</h1>
+    <p>基于 Token 用量与模型单价，快速估算 API 调用成本</p>
+  </header>
+
+  <!-- Input Card -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">⚙️</span> 参数设置
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>输入 Tokens</label>
+        <input type="number" id="input-tokens" placeholder="例如 1000" min="0" value="0">
+      </div>
+      <div class="form-group">
+        <label>输出 Tokens</label>
+        <input type="number" id="output-tokens" placeholder="例如 500" min="0" value="0">
+      </div>
+      <div class="form-group full-width">
+        <label>选择模型</label>
+        <select id="model-select">
+          <option value="deepseek-v4-flash">DeepSeek v4 Flash</option>
+          <option value="deepseek-v4-pro">DeepSeek v4 Pro</option>
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="claude-sonnet-4">Claude Sonnet 4</option>
+          <option value="custom">自定义</option>
+        </select>
+      </div>
+
+      <!-- Custom prices (shown when 'custom' selected) -->
+      <div class="custom-prices" id="custom-prices">
+        <div class="form-group">
+          <label>输入价格 (¥/百万 Tokens)</label>
+          <input type="number" id="custom-input-price" placeholder="例如 200" min="0" value="200">
+        </div>
+        <div class="form-group">
+          <label>输出价格 (¥/百万 Tokens)</label>
+          <input type="number" id="custom-output-price" placeholder="例如 600" min="0" value="600">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result Card -->
+  <div class="card" id="result-card">
+    <div class="card-title">
+      <span class="icon">📊</span> 费用明细
+    </div>
+
+    <div class="results-grid">
+      <div class="result-item">
+        <div class="label">输入费用</div>
+        <div class="value accent-cyan" id="input-cost">¥0.0000</div>
+        <div class="unit">基于输入令牌数</div>
+      </div>
+      <div class="result-item">
+        <div class="label">输出费用</div>
+        <div class="value accent-green" id="output-cost">¥0.0000</div>
+        <div class="unit">基于输出令牌数</div>
+      </div>
+      <div class="result-item">
+        <div class="label">单次请求</div>
+        <div class="value accent-orange" id="request-cost">¥0.0000</div>
+        <div class="unit">输入 + 输出</div>
+      </div>
+    </div>
+
+    <div class="total-row">
+      <span class="label">💰 总计（单次请求）</span>
+      <span class="value" id="total-cost">¥0.0000</span>
+    </div>
+  </div>
+
+  <!-- Monthly Card -->
+  <div class="card" id="monthly-card">
+    <div class="card-title">
+      <span class="icon">📅</span> 月度估算
+    </div>
+    <div class="monthly-section">
+      <div class="monthly-input-row">
+        <div class="form-group">
+          <label>每日请求量</label>
+          <input type="number" id="daily-volume" placeholder="例如 1000" min="0" value="100">
+        </div>
+        <button class="btn btn-primary" id="copy-btn">
+          📋 复制结果
+        </button>
+      </div>
+
+      <div class="monthly-result">
+        <div class="monthly-item">
+          <div class="label">每日费用</div>
+          <div class="value" id="daily-cost">¥0.00</div>
+        </div>
+        <div class="monthly-item">
+          <div class="label">每月费用 (30天)</div>
+          <div class="value" id="monthly-cost">¥0.00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="margin-top:20px; text-align:center; color:var(--text-secondary); font-size:0.8rem; opacity:0.5;">
+    Token 成本计算器 · 数据仅作参考
+  </div>
+
+</div>
+
+<script>
+// ===== Model Pricing (CNY per million tokens) =====
+const MODELS = {
+  'deepseek-v4-flash':  { input: 85.71,  output: 342.86,  name: 'DeepSeek v4 Flash' },
+  'deepseek-v4-pro':    { input: 342.86, output: 685.71,  name: 'DeepSeek v4 Pro' },
+  'gpt-4o':             { input: 200,    output: 600,     name: 'GPT-4o' },
+  'claude-sonnet-4':    { input: 150,    output: 750,     name: 'Claude Sonnet 4' },
+};
+
+// ===== DOM Refs =====
+const inputTokensEl    = document.getElementById('input-tokens');
+const outputTokensEl   = document.getElementById('output-tokens');
+const modelSelectEl    = document.getElementById('model-select');
+const customPricesEl   = document.getElementById('custom-prices');
+const customInputEl    = document.getElementById('custom-input-price');
+const customOutputEl   = document.getElementById('custom-output-price');
+const dailyVolumeEl    = document.getElementById('daily-volume');
+
+const inputCostEl      = document.getElementById('input-cost');
+const outputCostEl     = document.getElementById('output-cost');
+const requestCostEl    = document.getElementById('request-cost');
+const totalCostEl      = document.getElementById('total-cost');
+const dailyCostEl      = document.getElementById('daily-cost');
+const monthlyCostEl    = document.getElementById('monthly-cost');
+const copyBtn          = document.getElementById('copy-btn');
+const toast            = document.getElementById('toast');
+
+// ===== Load persisted state =====
+function loadState() {
+  try {
+    const savedModel = localStorage.getItem('token-calc:model');
+    if (savedModel) {
+      modelSelectEl.value = savedModel;
+    }
+    const savedDaily = localStorage.getItem('token-calc:daily');
+    if (savedDaily !== null) {
+      dailyVolumeEl.value = savedDaily;
+    }
+    const savedInputTokens = localStorage.getItem('token-calc:input-tokens');
+    if (savedInputTokens !== null) {
+      inputTokensEl.value = savedInputTokens;
+    }
+    const savedOutputTokens = localStorage.getItem('token-calc:output-tokens');
+    if (savedOutputTokens !== null) {
+      outputTokensEl.value = savedOutputTokens;
+    }
+  } catch(e) { /* ignore */ }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('token-calc:model', modelSelectEl.value);
+    localStorage.setItem('token-calc:daily', dailyVolumeEl.value);
+    localStorage.setItem('token-calc:input-tokens', inputTokensEl.value);
+    localStorage.setItem('token-calc:output-tokens', outputTokensEl.value);
+  } catch(e) { /* ignore */ }
+}
+
+// ===== Get current pricing =====
+function getPricing() {
+  const key = modelSelectEl.value;
+  if (key === 'custom') {
+    return {
+      input: parseFloat(customInputEl.value) || 0,
+      output: parseFloat(customOutputEl.value) || 0,
+      name: '自定义'
+    };
+  }
+  return MODELS[key] || { input: 0, output: 0, name: '未知' };
+}
+
+// ===== Animate Number =====
+let animFrameId = null;
+
+function animateNumber(el, targetStr) {
+  // Extract numeric value from target string like "¥123.4567"
+  const target = parseFloat(targetStr.replace(/[^0-9.\-]/g, ''));
+  if (isNaN(target)) { el.textContent = targetStr; return; }
+
+  const currentStr = el.textContent;
+  const current = parseFloat(currentStr.replace(/[^0-9.\-]/g, ''));
+  if (isNaN(current)) { el.textContent = targetStr; return; }
+
+  if (Math.abs(current - target) < 0.00001) {
+    el.textContent = targetStr;
+    return;
+  }
+
+  // Cancel any ongoing animation
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
+
+  const prefix = targetStr.match(/^[^0-9.\-]+/)?.[0] || '';
+  const decimals = targetStr.includes('.') ? targetStr.split('.')[1].length : 0;
+  const duration = 300; // ms
+  const startTime = performance.now();
+  const startVal = current;
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease out cubic
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const currentVal = startVal + (target - startVal) * ease;
+    el.textContent = prefix + currentVal.toFixed(decimals);
+    if (progress < 1) {
+      animFrameId = requestAnimationFrame(step);
+    } else {
+      el.textContent = targetStr;
+      animFrameId = null;
+    }
+  }
+
+  animFrameId = requestAnimationFrame(step);
+}
+
+// ===== Calculate =====
+function calculate() {
+  const inputTokens = parseInt(inputTokensEl.value) || 0;
+  const outputTokens = parseInt(outputTokensEl.value) || 0;
+  const pricing = getPricing();
+
+  const inputCost = (inputTokens / 1000000) * pricing.input;
+  const outputCost = (outputTokens / 1000000) * pricing.output;
+  const total = inputCost + outputCost;
+
+  const dailyVolume = parseInt(dailyVolumeEl.value) || 0;
+  const dailyTotal = total * dailyVolume;
+  const monthlyTotal = dailyTotal * 30;
+
+  // Format strings
+  const fmtCost = (v) => '¥' + v.toFixed(4);
+  const fmtDaily = (v) => '¥' + v.toFixed(2);
+  const fmtMonthly = (v) => '¥' + v.toFixed(2);
+
+  const inputCostStr = fmtCost(inputCost);
+  const outputCostStr = fmtCost(outputCost);
+  const requestCostStr = fmtCost(inputCost + outputCost);
+  const totalStr = fmtCost(total);
+  const dailyStr = fmtDaily(dailyTotal);
+  const monthlyStr = fmtMonthly(monthlyTotal);
+
+  // Animate each value
+  animateNumber(inputCostEl, inputCostStr);
+  animateNumber(outputCostEl, outputCostStr);
+  animateNumber(requestCostEl, requestCostStr);
+  animateNumber(totalCostEl, totalStr);
+
+  // Monthly (animate with 2 decimal places)
+  animateNumber(dailyCostEl, dailyStr);
+  animateNumber(monthlyCostEl, monthlyStr);
+
+  // Save state
+  saveState();
+
+  // Return data for clipboard
+  return { inputTokens, outputTokens, pricing, inputCost, outputCost, total, dailyVolume, dailyTotal, monthlyTotal };
+}
+
+// ===== Show/hide custom price fields =====
+function toggleCustomPrices() {
+  const isCustom = modelSelectEl.value === 'custom';
+  customPricesEl.classList.toggle('visible', isCustom);
+  calculate();
+}
+
+// ===== Copy to clipboard =====
+function copyResult() {
+  const data = calculate();
+  const pricing = data.pricing;
+  const modelName = pricing.name;
+
+  const text = `🪙 Token 成本报告
+━━━━━━━━━━━━━━━━
+模型：${modelName}
+输入 Tokens：${data.inputTokens.toLocaleString()}
+输出 Tokens：${data.outputTokens.toLocaleString()}
+
+输入费用：¥${data.inputCost.toFixed(4)}
+输出费用：¥${data.outputCost.toFixed(4)}
+单次请求总计：¥${data.total.toFixed(4)}
+
+📅 月度估算（${data.dailyVolume} 次/天）
+每日费用：¥${data.dailyTotal.toFixed(2)}
+每月费用（30天）：¥${data.monthlyTotal.toFixed(2)}
+━━━━━━━━━━━━━━━━
+由 Token 成本计算器生成`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('✓ 已复制到剪贴板');
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('✓ 已复制到剪贴板');
+  });
+}
+
+// ===== Toast =====
+let toastTimer = null;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+// ===== Particle Background =====
+(function initParticles() {
+  const canvas = document.getElementById('particles-canvas');
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  let mouseX = -1000;
+  let mouseY = -1000;
+  let animId;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  class Particle {
+    constructor() {
+      this.reset(true);
+    }
+    reset(initial) {
+      this.x = Math.random() * canvas.width;
+      this.y = Math.random() * canvas.height;
+      this.size = Math.random() * 2.5 + 0.5;
+      this.speedX = (Math.random() - 0.5) * 0.4;
+      this.speedY = (Math.random() - 0.5) * 0.4;
+      this.opacity = Math.random() * 0.5 + 0.1;
+      this.hue = 190 + Math.random() * 30; // cyan range
+    }
+    update() {
+      this.x += this.speedX;
+      this.y += this.speedY;
+
+      // Wrap around
+      if (this.x < -10) this.x = canvas.width + 10;
+      if (this.x > canvas.width + 10) this.x = -10;
+      if (this.y < -10) this.y = canvas.height + 10;
+      if (this.y > canvas.height + 10) this.y = -10;
+
+      // Mouse interaction
+      const dx = this.x - mouseX;
+      const dy = this.y - mouseY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 120) {
+        const force = (120 - dist) / 120;
+        this.x += dx * force * 0.02;
+        this.y += dy * force * 0.02;
+      }
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${this.hue}, 80%, 60%, ${this.opacity})`;
+      ctx.fill();
+    }
+  }
+
+  const count = Math.min(80, Math.floor(canvas.width * canvas.height / 12000));
+  for (let i = 0; i < count; i++) {
+    particles.push(new Particle());
+  }
+
+  function drawConnections() {
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(0, 212, 255, ${0.06 * (1 - dist / 150)})`;
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (const p of particles) {
+      p.update();
+      p.draw();
+    }
+    drawConnections();
+
+    animId = requestAnimationFrame(animate);
+  }
+
+  document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+
+  document.addEventListener('mouseleave', () => {
+    mouseX = -1000;
+    mouseY = -1000;
+  });
+
+  animate();
+})();
+
+// ===== Event Listeners =====
+inputTokensEl.addEventListener('input', calculate);
+outputTokensEl.addEventListener('input', calculate);
+modelSelectEl.addEventListener('change', toggleCustomPrices);
+customInputEl.addEventListener('input', calculate);
+customOutputEl.addEventListener('input', calculate);
+dailyVolumeEl.addEventListener('input', calculate);
+copyBtn.addEventListener('click', copyResult);
+
+// ===== Init =====
+loadState();
+toggleCustomPrices();
+</script>
+</body>
+</html>

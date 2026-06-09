@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code to Markdown · 代码转 Markdown</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0a0a12;
+  --bg-card: rgba(255,255,255,0.03);
+  --bg-card-hover: rgba(255,255,255,0.05);
+  --border-color: rgba(255,255,255,0.06);
+  --border-focus: rgba(0,212,255,0.4);
+  --text-primary: #e8e8f0;
+  --text-secondary: #9898a8;
+  --text-muted: #68687a;
+  --accent: #00d4ff;
+  --accent-glow: rgba(0,212,255,0.15);
+  --secondary: #7c3aed;
+  --secondary-glow: rgba(124,58,237,0.15);
+  --success: #10b981;
+  --font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', 'DejaVu Sans Mono', monospace;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html { font-size: 15px; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ===== Particle Canvas ===== */
+#particles-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ===== Layout ===== */
+.app-wrapper {
+  position: relative;
+  z-index: 1;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 2rem 2rem 3rem;
+}
+
+/* ===== Header ===== */
+.app-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.app-header h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+.app-header .subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-top: 0.4rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/* ===== Controls Bar ===== */
+.controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.controls-bar label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.lang-select-wrapper {
+  position: relative;
+  flex: 0 0 210px;
+}
+.lang-select-wrapper select {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: var(--font-sans);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.lang-select-wrapper select:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255,255,255,0.12);
+}
+.lang-select-wrapper select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.lang-select-wrapper select option {
+  background: #141420;
+  color: var(--text-primary);
+}
+.lang-select-wrapper::after {
+  content: '▼';
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.action-btn.primary {
+  background: linear-gradient(135deg, var(--accent), #00a8cc);
+  color: #0a0a12;
+  font-weight: 600;
+}
+.action-btn.primary:hover {
+  box-shadow: 0 0 20px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.action-btn.secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+.action-btn.secondary:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-1px);
+}
+.action-btn:active { transform: translateY(0) scale(0.98); }
+
+.action-btn .icon { font-size: 1.1rem; line-height: 1; }
+.action-btn.copy-btn {
+  background: var(--secondary);
+  color: #fff;
+}
+.action-btn.copy-btn:hover {
+  box-shadow: 0 0 20px var(--secondary-glow);
+  transform: translateY(-1px);
+}
+
+/* ===== Main Panels ===== */
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: var(--transition);
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+.panel:hover {
+  border-color: rgba(255,255,255,0.08);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.2rem;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.01);
+  flex-shrink: 0;
+}
+.panel-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.panel-title .dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+.panel-title .dot.dot-input { background: var(--accent); }
+.panel-title .dot.dot-output { background: var(--secondary); }
+.panel-badge {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+
+.panel-body {
+  flex: 1;
+  position: relative;
+  display: flex;
+}
+
+/* ===== Input Panel (with line numbers) ===== */
+.input-area {
+  display: flex;
+  flex: 1;
+  position: relative;
+}
+.line-numbers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 1rem 0.6rem 1rem 1rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  user-select: none;
+  min-width: 3.2rem;
+  text-align: right;
+  background: rgba(255,255,255,0.01);
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
+}
+.line-numbers span {
+  display: block;
+  line-height: 1.6;
+  min-height: 1.6em;
+}
+
+#code-input {
+  flex: 1;
+  padding: 1rem;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  min-height: 360px;
+}
+#code-input::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+}
+#code-input:focus {
+  background: rgba(0,212,255,0.01);
+}
+
+/* ===== Output Panel ===== */
+.output-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+#markdown-output {
+  flex: 1;
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: auto;
+  min-height: 360px;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  cursor: default;
+}
+#markdown-output:focus { outline: none; }
+
+.output-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  pointer-events: none;
+  padding: 2rem;
+  text-align: center;
+}
+.output-placeholder .big-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.8rem;
+  opacity: 0.4;
+}
+.output-placeholder p {
+  font-size: 0.9rem;
+  max-width: 220px;
+  line-height: 1.5;
+}
+.output-placeholder.hidden { display: none; }
+
+.output-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border-color);
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ===== Toast ===== */
+.toast-container {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  pointer-events: none;
+}
+.toast {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-sm);
+  background: rgba(16,185,129,0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(16,185,129,0.25);
+  color: #6ee7b7;
+  font-size: 0.9rem;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+.empty-state .icon {
+  font-size: 3rem;
+  opacity: 0.15;
+}
+.empty-state h3 {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 1.05rem;
+}
+.empty-state p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .panels { grid-template-columns: 1fr; }
+  .app-wrapper { padding: 1.2rem; }
+  .app-header h1 { font-size: 1.5rem; }
+  .controls-bar { flex-direction: column; align-items: stretch; }
+  .lang-select-wrapper { flex: 1; }
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* ===== Highlight.js Overrides ===== */
+.hljs {
+  background: transparent !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+  font-size: inherit !important;
+}
+
+/* ===== Fade-in animation ===== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.panel {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.panel:nth-child(2) { animation-delay: 0.1s; }
+
+/* ===== Keyboard shortcut hint ===== */
+.kbd-hint {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  background: rgba(255,255,255,0.04);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Particle Canvas ===== -->
+<canvas id="particles-canvas"></canvas>
+
+<!-- ===== App ===== -->
+<div class="app-wrapper">
+
+  <!-- Header -->
+  <header class="app-header">
+    <h1>✦ Code to Markdown</h1>
+    <p class="subtitle">粘贴代码 · 选择语言 · 一键复制格式化的 Markdown</p>
+  </header>
+
+  <!-- Controls -->
+  <div class="controls-bar">
+    <label for="lang-select">编程语言</label>
+    <div class="lang-select-wrapper">
+      <select id="lang-select">
+        <option value="javascript">JavaScript</option>
+        <option value="python">Python</option>
+        <option value="typescript">TypeScript</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
+        <option value="json">JSON</option>
+        <option value="bash">Bash</option>
+        <option value="yaml">YAML</option>
+        <option value="sql">SQL</option>
+        <option value="markdown">Markdown</option>
+      </select>
+    </div>
+    <button class="action-btn primary" id="convert-btn">
+      <span class="icon">→</span> 转换
+    </button>
+    <button class="action-btn secondary" id="clear-btn">
+      <span class="icon">✕</span> 清空
+    </button>
+  </div>
+
+  <!-- Panels -->
+  <div class="panels">
+
+    <!-- Input Panel -->
+    <div class="panel" id="input-panel">
+      <div class="panel-header">
+        <span class="panel-title">
+          <span class="dot dot-input"></span> 代码输入
+        </span>
+        <span class="panel-badge"><span id="line-count">0</span> 行</span>
+      </div>
+      <div class="panel-body">
+        <div class="input-area">
+          <div class="line-numbers" id="line-numbers"><span>1</span></div>
+          <textarea id="code-input" spellcheck="false" placeholder="在此粘贴代码…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output Panel -->
+    <div class="panel" id="output-panel">
+      <div class="panel-header">
+        <span class="panel-title">
+          <span class="dot dot-output"></span> Markdown 输出
+        </span>
+        <span class="panel-badge"><span id="output-chars">0</span> 字符</span>
+      </div>
+      <div class="panel-body">
+        <div class="output-area">
+          <div class="output-placeholder" id="output-placeholder">
+            <div class="big-icon">```</div>
+            <p>点击「转换」生成格式化的 Markdown 代码块</p>
+          </div>
+          <textarea id="markdown-output" readonly spellcheck="false"></textarea>
+          <div class="output-footer">
+            <button class="action-btn copy-btn" id="copy-btn">
+              <span class="icon">📋</span> 复制
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast-container" id="toast-container">
+  <div class="toast" id="toast">
+    <span>✓</span>
+    <span id="toast-msg">已复制到剪贴板</span>
+  </div>
+</div>
+
+<!-- ===== Highlight.js ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<!-- ===== App Script ===== -->
+<script>
+(function() {
+  'use strict';
+
+  // ---- DOM refs ----
+  const codeInput     = document.getElementById('code-input');
+  const lineNumbers   = document.getElementById('line-numbers');
+  const lineCountEl   = document.getElementById('line-count');
+  const langSelect    = document.getElementById('lang-select');
+  const convertBtn    = document.getElementById('convert-btn');
+  const clearBtn      = document.getElementById('clear-btn');
+  const mdOutput      = document.getElementById('markdown-output');
+  const outputChars   = document.getElementById('output-chars');
+  const placeholder   = document.getElementById('output-placeholder');
+  const copyBtn       = document.getElementById('copy-btn');
+  const toast         = document.getElementById('toast');
+  const toastMsg      = document.getElementById('toast-msg');
+  const canvas        = document.getElementById('particles-canvas');
+
+  // ---- Load saved language ----
+  const savedLang = localStorage.getItem('codetomd_lang');
+  if (savedLang) {
+    const opt = langSelect.querySelector(`option[value="${savedLang}"]`);
+    if (opt) langSelect.value = savedLang;
+  }
+
+  // ---- Line numbers ----
+  function updateLineNumbers() {
+    const lines = codeInput.value.split('\n');
+    const count = lines.length;
+    lineNumbers.innerHTML = lines.map((_, i) => `<span>${i + 1}</span>`).join('');
+    lineCountEl.textContent = count;
+  }
+
+  // Sync scroll of line numbers with textarea
+  function syncLineScroll() {
+    lineNumbers.scrollTop = codeInput.scrollTop;
+  }
+
+  codeInput.addEventListener('input', updateLineNumbers);
+  codeInput.addEventListener('scroll', syncLineScroll);
+  codeInput.addEventListener('keydown', function(e) {
+    // Tab = 2 spaces
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = this.selectionStart;
+      const end   = this.selectionEnd;
+      this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+      this.selectionStart = this.selectionEnd = start + 2;
+      updateLineNumbers();
+    }
+  });
+
+  // ---- Convert ----
+  function convert() {
+    const code = codeInput.value;
+    const lang = langSelect.value;
+
+    if (!code.trim()) {
+      mdOutput.value = '';
+      placeholder.classList.remove('hidden');
+      outputChars.textContent = '0';
+      return;
+    }
+
+    // Save language preference
+    localStorage.setItem('codetomd_lang', lang);
+
+    // Build markdown code block
+    const langMap = {
+      'javascript': 'javascript',
+      'python':     'python',
+      'typescript': 'typescript',
+      'html':       'html',
+      'css':        'css',
+      'json':       'json',
+      'bash':       'bash',
+      'yaml':       'yaml',
+      'sql':        'sql',
+      'markdown':   'markdown'
+    };
+    const mdLang = langMap[lang] || '';
+
+    let md = '```' + mdLang + '\n' + code + '\n```';
+
+    // Syntax highlight the markdown output (meta: show highlighted code block)
+    // We actually show the raw markdown text in the textarea, but highlight
+    // via highlight.js on the preview side. For copy, we copy raw markdown.
+    // Actually we want the user to COPY the raw markdown (with backticks).
+    // The textarea shows the raw markdown. Perfect.
+
+    mdOutput.value = md;
+    placeholder.classList.add('hidden');
+    outputChars.textContent = md.length;
+
+    // Scroll output to top
+    mdOutput.scrollTop = 0;
+  }
+
+  // ---- Clear ----
+  function clearAll() {
+    codeInput.value = '';
+    mdOutput.value = '';
+    placeholder.classList.remove('hidden');
+    outputChars.textContent = '0';
+    updateLineNumbers();
+    codeInput.focus();
+  }
+
+  // ---- Copy ----
+  function copyOutput() {
+    const text = mdOutput.value;
+    if (!text.trim()) return;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板')).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('已复制到剪贴板');
+    } catch (e) {
+      showToast('复制失败，请手动选择复制');
+    }
+    document.body.removeChild(ta);
+  }
+
+  // ---- Toast ----
+  let toastTimer = null;
+  function showToast(msg) {
+    toastMsg.textContent = msg;
+    toast.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('visible'), 2200);
+  }
+
+  // ---- Keyboard shortcuts ----
+  document.addEventListener('keydown', function(e) {
+    // Ctrl+Enter or Cmd+Enter to convert
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      convert();
+    }
+    // Escape to clear
+    if (e.key === 'Escape' && document.activeElement === codeInput) {
+      if (!codeInput.value) return;
+      e.preventDefault();
+      clearAll();
+    }
+  });
+
+  // ---- Events ----
+  convertBtn.addEventListener('click', convert);
+  clearBtn.addEventListener('click', clearAll);
+  copyBtn.addEventListener('click', copyOutput);
+
+  // Auto-convert if there's content already (from paste etc.)
+  codeInput.addEventListener('paste', function() {
+    // Small delay to let the value update
+    setTimeout(() => {
+      updateLineNumbers();
+      convert();
+    }, 10);
+  });
+
+  // ---- Initial line numbers ----
+  updateLineNumbers();
+
+  // ---- Particle Starfield ----
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  const PARTICLE_COUNT = 140;
+  let mouseX = -9999, mouseY = -9999;
+  let animFrame;
+
+  function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  function initParticles() {
+    particles = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: (Math.random() - 0.5) * 0.35,
+        r: Math.random() * 1.5 + 0.5,
+        o: Math.random() * 0.6 + 0.2
+      });
+    }
+  }
+
+  function drawParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+
+      // Move
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // Wrap
+      if (p.x < 0) p.x = canvas.width;
+      if (p.x > canvas.width) p.x = 0;
+      if (p.y < 0) p.y = canvas.height;
+      if (p.y > canvas.height) p.y = 0;
+
+      // Draw
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(200, 215, 255, ${p.o})`;
+      ctx.fill();
+
+      // Mouse interaction
+      const dx = mouseX - p.x;
+      const dy = mouseY - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 130) {
+        const force = (130 - dist) / 130;
+        p.x -= dx * force * 0.012;
+        p.y -= dy * force * 0.012;
+      }
+
+      // Connection lines (subtle)
+      for (let j = i + 1; j < particles.length; j++) {
+        const p2 = particles[j];
+        const dx2 = p.x - p2.x;
+        const dy2 = p.y - p2.y;
+        const dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+        if (dist2 < 100) {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.strokeStyle = `rgba(150, 180, 255, ${(1 - dist2 / 100) * 0.12})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    animFrame = requestAnimationFrame(drawParticles);
+  }
+
+  function startParticles() {
+    resizeCanvas();
+    initParticles();
+    drawParticles();
+  }
+
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    initParticles();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+
+  document.addEventListener('mouseleave', () => {
+    mouseX = -9999;
+    mouseY = -9999;
+  });
+
+  startParticles();
+
+  // ---- Convert on language change ----
+  langSelect.addEventListener('change', () => {
+    if (codeInput.value.trim()) convert();
+  });
+
+  // ---- Auto-convert if there's initial content ----
+  // (useful if someone pastes before JS loads)
+  if (codeInput.value.trim()) {
+    convert();
+  }
+
+})();
+</script>
+</body>
+</html>
